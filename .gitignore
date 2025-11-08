@@ -1,0 +1,16 @@
+# Ignore Python cache and environments
+__pycache__/
+.venv/
+.env/
+
+# Ignore system files
+.DS_Store
+
+# Ignore model files if too large
+*.keras
+*.h5
+
+# Ignore output and logs
+outputs/
+run_log.txt
+

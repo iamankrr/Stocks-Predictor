@@ -1,0 +1,11 @@
+numpy
+pandas
+scikit-learn
+lightgbm
+xgboost
+yfinance
+matplotlib
+hmmlearn
+joblib
+transformers
+torch
