@@ -1,5 +1,5 @@
 numpy
-#pandas
+pandas
 scikit-learn
 lightgbm
 xgboost
