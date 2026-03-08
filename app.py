@@ -61,7 +61,9 @@ POPULAR_STOCKS = {
 #  SESSION STATE
 # ────────────────────────────────────────────────────────────
 for k, v in {
-    "dark_mode": False, "show_table": True, "live": False, "show_meta": False
+    "dark_mode": False, "show_table": True, "live": False, "show_meta": False,
+    "compare_mode": False, "compare_ticker": "TCS.NS",
+    "show_ohlcv": False, "show_fcast_tbl": False,
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -123,23 +125,46 @@ def inject_css():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&family=DM+Mono:wght@400;500&display=swap');
 
-    /* ── KILL ALL STREAMLIT CHROME ── */
+    /* ── KILL ALL STREAMLIT CHROME + keyboard_double_arrow icon ── */
     #MainMenu,footer,header,
     [data-testid="stToolbar"],
     [data-testid="stDecoration"],
     [data-testid="stStatusWidget"],
     [data-testid="collapsedControl"],
+    [data-testid="baseButton-headerNoPadding"],
     button[kind="header"],
+    button[kind="headerNoPadding"],
     [data-testid="baseButton-header"],
+    [aria-label="Close sidebar"],
+    [aria-label="Open sidebar"],
+    [aria-label="Collapse sidebar"],
+    [aria-label="Expand sidebar"],
     .st-emotion-cache-zq5wmm,
     .st-emotion-cache-1egp75f,
     .st-emotion-cache-15zrgzn,
     .st-emotion-cache-eczf96,
+    .st-emotion-cache-1dp5vir,
+    .st-emotion-cache-6tkfeg,
+    .st-emotion-cache-dvne4q,
     .viewerBadge_container__r5tak,
     .viewerBadge_link__qRIco,
     .css-1rs6os,
     .css-17ziqus
     {{ display:none !important; visibility:hidden !important; width:0 !important; height:0 !important; overflow:hidden !important; }}
+
+    /* Kill sidebar collapse arrow icon specifically */
+    section[data-testid="stSidebar"] > div > div:first-child > button,
+    section[data-testid="stSidebar"] button[data-testid*="collapse"],
+    section[data-testid="stSidebar"] button[data-testid*="close"],
+    div[data-testid="stSidebarCollapsedControl"],
+    .st-emotion-cache-1cypcdb,
+    .st-emotion-cache-h5rgaw
+    {{ display:none !important; visibility:hidden !important; }}
+
+    /* Nuclear: hide ANY button at very top of sidebar wrapper */
+    [data-testid="stSidebarNav"],
+    section[data-testid="stSidebar"]>div>button:first-of-type
+    {{ display:none !important; }}
 
     /* ── HIDE DELTAGEN REPR / DEBUG TEXT IN SIDEBAR ── */
     section[data-testid="stSidebar"] .stText,
@@ -697,8 +722,27 @@ def sidebar():
             📡 Live Price Feed
         </div>""", unsafe_allow_html=True)
 
+        st.markdown("---")
+        st.markdown("#### ⚖️ Compare Stocks")
+        st.session_state["compare_mode"] = st.checkbox(
+            "Enable comparison", value=st.session_state["compare_mode"])
+        compare_ticker = ""
+        if st.session_state["compare_mode"]:
+            compare_disp = [f"{k}  —  {v}" for k, v in POPULAR_STOCKS.items()]
+            csel = st.selectbox("Compare with", [""] + compare_disp,
+                                label_visibility="collapsed", key="cmp_sel")
+            if csel:
+                compare_ticker = csel.split("  —  ")[0].strip()
+                st.session_state["compare_ticker"] = compare_ticker
+            else:
+                compare_ticker = st.text_input(
+                    "Or type ticker", st.session_state["compare_ticker"],
+                    placeholder="e.g. TSLA, HDFCBANK.NS",
+                    label_visibility="collapsed", key="cmp_input").strip().upper()
+                st.session_state["compare_ticker"] = compare_ticker
+
         st.markdown(f"<div style='color:{TXT3};font-size:11px;text-align:center;margin-top:10px;'>v2.0 Professional Edition</div>", unsafe_allow_html=True)
-        return ticker, start, fdays, model
+        return ticker, start, fdays, model, compare_ticker
 
 
 # ────────────────────────────────────────────────────────────
@@ -706,7 +750,7 @@ def sidebar():
 # ────────────────────────────────────────────────────────────
 def main():
     inject_css()
-    ticker_input, start_date, forecast_days, model = sidebar()
+    ticker_input, start_date, forecast_days, model, compare_ticker = sidebar()
 
     if not ticker_input:
         st.info("👈 Select or enter a ticker symbol in the sidebar to begin.")
@@ -761,7 +805,7 @@ def main():
     st.markdown(f'<hr style="border-color:{BORDER};margin:0.6rem 0">', unsafe_allow_html=True)
 
     # ── TABS ────────────────────────────────────────────────
-    T = st.tabs(["📊 Overview","🕯 Charts","🔮 AI Forecast","⚖️ Risk","💼 Portfolio","🏢 Company"])
+    T = st.tabs(["📊 Overview","🕯 Charts","🔮 AI Forecast","⚖️ Risk","💼 Portfolio","🏢 Company","📊 Compare"])
 
     # ══ TAB 0 — OVERVIEW ══════════════════════════════════════
     with T[0]:
@@ -1109,6 +1153,146 @@ def main():
                     padding:16px 20px;font-size:13.5px;color:{TXT2};line-height:1.75;">
                     {summary[:1400]}{"…" if len(summary)>1400 else ""}
                 </div>""", unsafe_allow_html=True)
+
+    # ══ TAB 6 — COMPARE ══════════════════════════════════════
+    with T[6]:
+        sec("📊","Stock Comparison")
+        if not st.session_state["compare_mode"] or not compare_ticker:
+            st.markdown(f"""
+            <div class="ss-card" style="text-align:center;padding:40px 20px;">
+                <div style="font-size:36px;margin-bottom:12px">⚖️</div>
+                <div style="font-size:16px;font-weight:700;color:{TXT};margin-bottom:8px">Enable Stock Comparison</div>
+                <div style="font-size:13px;color:{TXT3};">Enable "Compare Stocks" in the sidebar and pick a second ticker to compare.</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            with st.spinner(f"Loading {compare_ticker}…"):
+                try:
+                    df2, ticker2_used = fetch_data(compare_ticker, start_date)
+                except Exception as e:
+                    st.error(f"Could not load {compare_ticker}: {e}")
+                    df2 = None; ticker2_used = compare_ticker
+
+            if df2 is not None:
+                info2     = fetch_info(ticker2_used)
+                cur2_sym, _ = currency_of(compare_ticker, ticker2_used, info2)
+                name2     = info2.get("longName") or info2.get("shortName") or ticker2_used
+                price2    = float(pd.Series(df2["Close"].values.flatten(), dtype=float).iloc[-1])
+                prev2     = float(pd.Series(df2["Close"].values.flatten(), dtype=float).iloc[-2])
+                chg2      = (price2-prev2)/(prev2+1e-9)*100
+                clr2      = GREEN if chg2>=0 else RED
+
+                # Side-by-side quick stats
+                st.markdown(f"""
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.5rem;">
+                  <div class="ss-card" style="border-top:3px solid {ACCENT};">
+                    <div class="ss-lbl">{ticker_used}</div>
+                    <div style="font-size:22px;font-weight:800;color:{TXT}">{company_name}</div>
+                    <div style="font-size:26px;font-weight:800;color:{ACCENT};margin-top:6px">{cur_sym}{curr_price:,.2f}</div>
+                    <div style="font-size:13px;color:{'GREEN' if day_pct>=0 else RED}">{'▲' if day_pct>=0 else '▼'} {abs(day_pct):.2f}% today</div>
+                  </div>
+                  <div class="ss-card" style="border-top:3px solid {PURPLE};">
+                    <div class="ss-lbl">{ticker2_used}</div>
+                    <div style="font-size:22px;font-weight:800;color:{TXT}">{name2}</div>
+                    <div style="font-size:26px;font-weight:800;color:{PURPLE};margin-top:6px">{cur2_sym}{price2:,.2f}</div>
+                    <div style="font-size:13px;color:{clr2}">{'▲' if chg2>=0 else '▼'} {abs(chg2):.2f}% today</div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+
+                # Normalised price chart (both on same scale, base=100)
+                sec("📈","Normalised Price (Base = 100)")
+                p1 = pd.Series(df["Close"].values.flatten(), index=df.index, dtype=float).dropna()
+                p2 = pd.Series(df2["Close"].values.flatten(), index=df2.index, dtype=float).dropna()
+                # Find common start
+                common_start = max(p1.index[0], p2.index[0])
+                p1 = p1[p1.index >= common_start]
+                p2 = p2[p2.index >= common_start]
+                n1 = p1 / p1.iloc[0] * 100
+                n2 = p2 / p2.iloc[0] * 100
+                fig_cmp = go.Figure()
+                fig_cmp.add_trace(go.Scatter(x=n1.index, y=n1.values, mode="lines",
+                    name=ticker_used, line=dict(color=ACCENT, width=2)))
+                fig_cmp.add_trace(go.Scatter(x=n2.index, y=n2.values, mode="lines",
+                    name=ticker2_used, line=dict(color=PURPLE, width=2)))
+                fig_cmp.add_hline(y=100, line=dict(color=TXT3, dash="dot", width=1))
+                fig_cmp.update_layout(**CHART_BASE, height=380,
+                    xaxis=_xax(), yaxis=_yax(title="Indexed Price (Base=100)"),
+                    title=dict(text=f"<b>{ticker_used} vs {ticker2_used}</b> — Normalised",
+                               font=dict(size=13, color=TXT)))
+                st.plotly_chart(fig_cmp, use_container_width=True, key="cmp_norm")
+
+                # Returns correlation
+                sec("📉","Daily Returns Comparison")
+                r1 = p1.pct_change().dropna() * 100
+                r2 = p2.pct_change().dropna() * 100
+                common_idx = r1.index.intersection(r2.index)
+                r1c, r2c = r1[common_idx], r2[common_idx]
+
+                c1x, c2x = st.columns(2)
+                with c1x:
+                    fig_r1 = go.Figure(go.Histogram(x=r1c, nbinsx=50,
+                        marker_color=rgba(ACCENT,0.7), name=ticker_used))
+                    fig_r1.update_layout(**CHART_BASE, height=260,
+                        xaxis=_xax(title="Return %"), yaxis=_yax(),
+                        title=dict(text=f"<b>{ticker_used}</b> Returns",font=dict(size=12,color=TXT)))
+                    st.plotly_chart(fig_r1, use_container_width=True, key="cmp_r1")
+                with c2x:
+                    fig_r2 = go.Figure(go.Histogram(x=r2c, nbinsx=50,
+                        marker_color=rgba(PURPLE,0.7), name=ticker2_used))
+                    fig_r2.update_layout(**CHART_BASE, height=260,
+                        xaxis=_xax(title="Return %"), yaxis=_yax(),
+                        title=dict(text=f"<b>{ticker2_used}</b> Returns",font=dict(size=12,color=TXT)))
+                    st.plotly_chart(fig_r2, use_container_width=True, key="cmp_r2")
+
+                # Scatter correlation
+                sec("🔗","Return Correlation Scatter")
+                corr = float(r1c.corr(r2c))
+                fig_sc = go.Figure(go.Scatter(x=r1c, y=r2c, mode="markers",
+                    marker=dict(color=rgba(ACCENT,0.5), size=4),
+                    name="Daily Returns",
+                    hovertemplate=f"{ticker_used}: %{{x:.2f}}%<br>{ticker2_used}: %{{y:.2f}}%<extra></extra>"))
+                # Trend line
+                z = np.polyfit(r1c, r2c, 1)
+                xline = np.linspace(r1c.min(), r1c.max(), 100)
+                fig_sc.add_trace(go.Scatter(x=xline, y=np.polyval(z, xline),
+                    mode="lines", line=dict(color=RED, width=1.5, dash="dot"), name="Trend"))
+                fig_sc.update_layout(**CHART_BASE, height=350,
+                    xaxis=_xax(title=f"{ticker_used} Daily Return %"),
+                    yaxis=_yax(title=f"{ticker2_used} Daily Return %"),
+                    title=dict(text=f"<b>Correlation: {corr:.3f}</b>  ({'High' if abs(corr)>0.7 else ('Moderate' if abs(corr)>0.4 else 'Low')})",
+                               font=dict(size=13, color=TXT)))
+                st.plotly_chart(fig_sc, use_container_width=True, key="cmp_scatter")
+
+                # Risk comparison table
+                sec("⚖️","Risk Metrics Side-by-Side")
+                rm1 = risk_metrics(p1)
+                rm2 = risk_metrics(p2)
+                rows = []
+                for metric in rm1:
+                    v1, v2 = rm1[metric], rm2[metric]
+                    winner = ticker_used if (
+                        (metric in ["Sharpe Ratio","Sortino Ratio","Win Rate %","Calmar Ratio"] and v1 > v2) or
+                        (metric in ["Ann. Volatility %","Max Drawdown %","VaR 95%","CVaR 95%"] and v1 > v2 and metric == "Max Drawdown %") or
+                        (metric in ["Ann. Volatility %","VaR 95%","CVaR 95%"] and v1 > v2)
+                    ) else ticker2_used
+                    rows.append({"Metric": metric, ticker_used: v1, ticker2_used: v2})
+                cmp_df = pd.DataFrame(rows).set_index("Metric")
+                st.dataframe(cmp_df.style.format("{:.2f}"), use_container_width=True)
+
+                # Volume comparison
+                sec("📊","Volume Comparison")
+                v1s = pd.Series(df["Volume"].values.flatten(), index=df.index, dtype=float)
+                v2s = pd.Series(df2["Volume"].values.flatten(), index=df2.index, dtype=float)
+                v1r = v1s.rolling(20).mean().dropna()
+                v2r = v2s.rolling(20).mean().dropna()
+                fig_vol = go.Figure()
+                fig_vol.add_trace(go.Scatter(x=v1r.index, y=v1r.values, mode="lines",
+                    name=f"{ticker_used} Vol (20d MA)", line=dict(color=ACCENT, width=1.8)))
+                fig_vol.add_trace(go.Scatter(x=v2r.index, y=v2r.values, mode="lines",
+                    name=f"{ticker2_used} Vol (20d MA)", line=dict(color=PURPLE, width=1.8)))
+                fig_vol.update_layout(**CHART_BASE, height=280,
+                    xaxis=_xax(), yaxis=_yax(title="Volume (20d MA)"),
+                    title=dict(text="<b>Trading Volume</b>", font=dict(size=13,color=TXT)))
+                st.plotly_chart(fig_vol, use_container_width=True, key="cmp_vol")
 
     # FOOTER
     st.markdown(f"""<div style="margin-top:3rem;padding:14px;text-align:center;
